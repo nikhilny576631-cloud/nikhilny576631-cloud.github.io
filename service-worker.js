@@ -1,13 +1,12 @@
-const CACHE = 'pwa-v1';
-const FILES = ['/', '/index.html', '/manifest.json'];
-
-self.addEventListener('install', evt => {
-  evt.waitUntil(caches.open(CACHE).then(cache => cache.addAll(FILES)));
+self.addEventListener('install', event => {
+  console.log('Service Worker installed');
   self.skipWaiting();
 });
-self.addEventListener('activate', evt => {
-  evt.waitUntil(self.clients.claim());
+
+self.addEventListener('activate', event => {
+  console.log('Service Worker activated');
 });
-self.addEventListener('fetch', evt => {
-  evt.respondWith(caches.match(evt.request).then(resp => resp || fetch(evt.request)));
+
+self.addEventListener('fetch', event => {
+  event.respondWith(fetch(event.request));
 });
